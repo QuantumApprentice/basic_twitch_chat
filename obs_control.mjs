@@ -47,7 +47,7 @@ function close_clip_items(wsOBS, obj) {
       "op": 6,
       "d" : {
         "requestType"  : "SetSceneItemEnabled",
-        "requestId"    : "123",
+        "requestId"    : "Quantum Bot",
         "requestData"  : {
           "sceneName"  : "Clips",
           "sceneItemId": clipSceneItemList[obj.d.eventData.inputName],
@@ -68,7 +68,7 @@ export function play_clip_items(wsOBS, clipname) {
       "op": 6,
       "d" : {
         "requestType"  : "SetSceneItemEnabled",
-        "requestId"    : "123",
+        "requestId"    : "Quantum Bot",
         "requestData"  : {
           "sceneName"  : "Clips",
           "sceneItemId": clipSceneItemList[clipname],
@@ -85,7 +85,7 @@ function parse_clip_items(wsOBS) {
     "op": 6,
     "d" : {
       "requestType" : "GetSceneItemList",
-      "requestId"   : "123",
+      "requestId"   : "Quantum Bot",
       "requestData" : {
         "sceneName" : "Clips"
       }
