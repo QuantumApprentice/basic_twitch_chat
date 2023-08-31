@@ -37,7 +37,7 @@ wsTwitch.onmessage = (fullmsg) => {
   let indx = 0;
   let just_tags = '';
   let tags_obj = {};
-  const emote_list = new Map();
+  const emote_list = [];
 
   if (txt[0] == '@') {
     indx = txt.indexOf(' ');
@@ -97,61 +97,24 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
 
 
   if (tags_obj['emotes']) {
-    // console.log("emote? ", emote_list);
-    // console.log("tags_obj[emotes]: ", tags_obj['emotes']);
 
-    for (const [id,info] of emote_list.entries()) {
-
-      console.log("id: ", id);
-      console.log("info: ", info);
-      console.log("emote_lsit: ", emote_list);
-
-      emote = document.createElement("img");
-      emote.setAttribute('src', info.url);
-
-
-      console.log("emote: ", emote);
+      let parts = [];
       let end_indx = outmsg.length;
-      let pos = info.positions;
-      for (let i = pos.length; --i >= 0; ) {
 
+    for (let i = emote_list.length; --i >= 0; ) {
+      emote = document.createElement("img");
+      emote.setAttribute('src', emote_list[i].url);
 
-
-
-
-
-        // let replace = outmsg.substring(pos[i].startPosition, pos[i].endPosition+1);
-
-        let first_half = esc_html(outmsg.slice(0,pos[i].startPosition));
-        let last_half = (outmsg.slice(pos[i].endPosition + 1));
-        console.log("last_half: ", last_half);
-        // let indx = outmsg.indexOf(replace);
-        outmsg = first_half + emote.outerHTML + last_half;
-
-        // console.log("replace", replace);
-        // outmsg.replace(replace, emote);
-      }
-
-
-    
-      // let pos = info.positions[0];
-
-
-
-
-
-
-
-
-      // console.log(emote_list[id].positions[0]);
-
-      // outmsg.slice(emote_list[id].positions?);    ?
-      // outmsg.insert(emote_list[id].positions[0].startPosition); ?
-
-
-      // chatMSG.append(emote);
+      let last_half = esc_html(outmsg.slice(emote_list[i].end + 1, end_indx));
+      parts.unshift(last_half);
+      parts.unshift(emote.outerHTML);
+      end_indx = emote_list[i].start;
 
     }
+    parts.unshift(esc_html(outmsg.slice(0, end_indx)));
+    outmsg = parts.join('');
+
+
   }
 
 
@@ -184,7 +147,6 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
 }
 
 function parse_tags(tags) {
-  // console.log("tags: ", tags);
   let parsed_tags = tags.split(';');
 
   parsed_tags.forEach(tag => {
@@ -216,7 +178,6 @@ function parse_tags(tags) {
         break;
     }
   })
-  // console.log(parsed_tags);
   parsed_tags['emotes'] ??= {};
 
   return parsed_tags;
@@ -224,35 +185,27 @@ function parse_tags(tags) {
 
 function get_emote_list(emote_obj, emote_list)
 {
-  // console.log("parsed_tags: ", parsed_tags);
-  emote_list.clear();
   const cdn_url = "https://static-cdn.jtvnw.net/emoticons/v2/" //<id>/<format>/<theme_mode>/<"
-
-  // console.log("emote_obj: ", emote_obj);
 
   for (const [emote_id, pos] of Object.entries(emote_obj)) {
     let out_url = cdn_url + emote_id + "/default/dark/2.0";
-    emote_list.set(
-      emote_id, {
-        "url": out_url,
-        "positions":pos
-    });
 
-
-    // emote_list.set(k, cdn_url + emote_id + "/default/dark/2.0");
-    // emote_list[k] = cdn_url + emote_id + "/default/dark/1.0";
-    // parsed_tags['emotes'][emote_id]['url'] = cdn_url;
-    // let urla = cdn_url + emote_id + "/default/dark/2.0";
-    // parsed_tags[emote_id] = urla;
-    // console.log("list? ", emote_list);
+    for (const i of pos) {
+      emote_list.push ({
+        id: emote_id,
+        url: out_url,
+        start: parseInt(i.startPosition),
+        end: parseInt(i.endPosition),
+      });
+    }
 
   }
-  // console.log("parsed_tags: ", parsed_tags);
+  emote_list.sort((a,b)=>a.start - b.start);
   console.log("emote_list: ", emote_list);
 }
 
 function esc_html(s) {
-  console.log("s: ", s);
+  if (!s) {return s};
   let el = document.createElement('i');
   el.textContent = s;
 
