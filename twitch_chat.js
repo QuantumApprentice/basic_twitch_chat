@@ -146,6 +146,7 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
   },maxMsgTime*1000);
 }
 
+// Basic parse function from twitch
 function parse_tags(tags) {
   let parsed_tags = tags.split(';');
 
@@ -178,11 +179,15 @@ function parse_tags(tags) {
         break;
     }
   })
+  // creates an empty list if returns null
   parsed_tags['emotes'] ??= {};
 
   return parsed_tags;
 }
 
+// Parse the emote_obj to just get emotes,
+//  place them in an array with urls for each
+//  position, then sort the array by position
 function get_emote_list(emote_obj, emote_list)
 {
   const cdn_url = "https://static-cdn.jtvnw.net/emoticons/v2/" //<id>/<format>/<theme_mode>/<"
@@ -201,9 +206,10 @@ function get_emote_list(emote_obj, emote_list)
 
   }
   emote_list.sort((a,b)=>a.start - b.start);
-  console.log("emote_list: ", emote_list);
 }
 
+// Make text strings with potential HTML exploits
+//  safe for putting into an HTML element
 function esc_html(s) {
   if (!s) {return s};
   let el = document.createElement('i');
