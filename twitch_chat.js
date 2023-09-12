@@ -53,9 +53,16 @@ wsTwitch.onmessage = (fullmsg) => {
     let pos1 = txt.indexOf('@', indx) + 1;
     let pos2 = txt.indexOf(".", pos1);
     let pos3 = txt.indexOf(`#${channelName}`)+2;
-    // create strings based on those positions
     pos3 += channelName.length + 1;
+
+    // create strings based on those positions
     name = txt.substring(pos1, pos2).trim();
+
+    if ((name == ":tmi") || (name == "justinfan6969") 
+      || (name.includes("@emote-only=0;"))
+      || (name == ":justinfan6969"))
+      { return; }
+
     outmsg = txt.substring(pos3).trim();
     // check if its a bot command
     if (outmsg[0] == '!') {
@@ -82,6 +89,8 @@ wsTwitch.onmessage = (fullmsg) => {
   }
 }
 
+// global msg_time to set timeouts on messages
+let msg_time = 0;
 // display chat message on stream
 function display_msg(name, outmsg, tags_obj, emote_list) {
   let emote;
@@ -89,15 +98,14 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
 
   let auth = document.createElement("div");
   auth.classList.add("Name");
-  auth.textContent = name;
 
+  if (tags_obj['color']) {
+    auth.style.color = tags_obj['color'];
+  }
 
-
-
-
+  auth.textContent = tags_obj['display_name'] || name;
 
   if (tags_obj['emotes']) {
-
       let parts = [];
       let end_indx = outmsg.length;
 
@@ -109,18 +117,10 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
       parts.unshift(last_half);
       parts.unshift(emote.outerHTML);
       end_indx = emote_list[i].start;
-
     }
     parts.unshift(esc_html(outmsg.slice(0, end_indx)));
     outmsg = parts.join('');
-
-
   }
-
-
-
-
-
 
   let msg = document.createElement("div");
   msg.classList.add("Message");
@@ -138,8 +138,20 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
     chatBody.children[0].remove();
   }
 
+  let fade_time = msg.textContent.length/3;
+
+  fade_time = Math.max(10, Math.min(30, fade_time));
+  let expectedEndTime = performance.now() + 1000 * fade_time;
+  if (expectedEndTime < msg_time) {
+    fade_time = (msg_time - performance.now())/1000;
+  }
+  else {
+    msg_time = expectedEndTime;
+  }
+
+  chatMSG.style.animation = `fadeOut forwards 1s ${fade_time}s`;
+
   // delete chat message after maxMsgTime has passed
-  chatMSG.dataset.fadeOutTime = performance.now() + 5000;
   setTimeout(function(){
       chatMSG.classList.add('messages');
       setTimeout(function(){chatMSG.remove();},1000);
@@ -149,6 +161,7 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
 // Basic parse function from twitch
 function parse_tags(tags) {
   let parsed_tags = tags.split(';');
+
 
   parsed_tags.forEach(tag => {
     let tag_key = tag.split('=');
@@ -177,11 +190,18 @@ function parse_tags(tags) {
           parsed_tags[tag_key[0]] = null;
         }
         break;
+      case 'color':
+        parsed_tags.color = tag_val;
+        break;
+      case 'display-name':
+        parsed_tags.display_name = tag_val;
+        break;
     }
   })
   // creates an empty list if returns null
   parsed_tags['emotes'] ??= {};
 
+  console.log("parsed_tags: ", parsed_tags);
   return parsed_tags;
 }
 
