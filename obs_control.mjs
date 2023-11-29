@@ -4,8 +4,11 @@ let clipSceneItemList = {};
 export function OBS_connect() {
   const OBSWebSocketURL = 'ws://127.0.0.1:4455';
   const wsOBS = new WebSocket(OBSWebSocketURL, 'obswebsocket.json');
+
   wsOBS.onopen = console.log;
   wsOBS.onclose = console.log;
+  wsOBS.onerror = console.log;
+
   wsOBS.onmessage = (msg)=> {
     const obsMSG = JSON.parse(msg.data);
 

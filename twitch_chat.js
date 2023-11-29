@@ -1,6 +1,34 @@
 // @ts-nocheck
 import {OBS_connect, play_clip_items} from "./obs_control.mjs"
-const wsOBS = OBS_connect();
+let wsOBS = OBS_connect();
+
+setTimeout(()=>{
+  if (wsOBS.readyState != 1)
+  wsOBS = OBS_connect();
+}, 10000);
+
+//other things to do to this before it's done
+//1) chat name needs to match color in chatbox
+//2) auto-translate chat from other languages?
+//3) make on-screen chat messages dissappear when deleted
+//4) make on-screen chat msgs disappear when ban/timeout
+//5) make chat stay on-screen in webcam only scene
+//6) sometimes "!" commands don't work after timeouts/bans?
+//7) specialized chat commands for this bot
+//    !first, !timer, 
+//8) make randomized memes play correctly (schwarzenoises, etc.)
+//9) make memes play sequentially
+
+
+
+// window.addEventListener('obsStreamingStarted', ()=>{
+//   if (!wsOBS) wsOBS = OBS_connect();
+// })
+// if(window.obsstudio?.pluginVersion) {
+//   window.addEventListener('obsStreamingStarted', ...);
+// } else {
+//   wsOBS = OBS_Connect();
+// }
 
 const channelName = 'quantumapprentice';
 const TwitchWebSocketUrl = 'wss://irc-ws.chat.twitch.tv:443';
@@ -58,7 +86,7 @@ wsTwitch.onmessage = (fullmsg) => {
     // create strings based on those positions
     name = txt.substring(pos1, pos2).trim();
 
-    if ((name == ":tmi") || (name == "justinfan6969") 
+    if ((name == ":tmi") || (name == "justinfan6969")
       || (name.includes("@emote-only=0;"))
       || (name == ":justinfan6969"))
       { return; }
@@ -67,12 +95,16 @@ wsTwitch.onmessage = (fullmsg) => {
     // check if its a bot command
     if (outmsg[0] == '!') {
       play_clip_items(wsOBS, outmsg.slice(1).trim());
+      // new timer countdown function
+      if (outmsg.slice(1).trim() == "timer") {
+        let remind_time = 1000*60*10;
+        timer(remind_time);
+      }
     }
     else {
       // display string on stream
       display_msg(name, outmsg, tags_obj, emote_list);
     }
-
   }
   else {
     // handle pings
@@ -87,6 +119,17 @@ wsTwitch.onmessage = (fullmsg) => {
       wsTwitch.send('PONG ' + outmsg);
     }
   }
+}
+
+function timer(time)
+{
+  setTimeout(()=>{
+    //need to send message to chat too
+    play_clip_items(wsOBS, "khan");
+    play_clip_items(wsOBS, "cookie");
+    play_clip_items(wsOBS, "nothing");
+    play_clip_items(wsOBS, "choppa");
+    }, time);
 }
 
 // global msg_time to set timeouts on messages
@@ -124,7 +167,6 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
 
   let msg = document.createElement("div");
   msg.classList.add("Message");
-  // msg.textContent = outmsg;
   msg.innerHTML = outmsg;
 
 
@@ -135,7 +177,8 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
   chatMSG.classList.add("message_box");
   if (chatBody.children.length > maxMsgCount) {
     // if more than maxMsgCount, delete first message
-    chatBody.children[0].remove();
+    chatBody.lastElementChild.remove();
+    // chatBody.children[chatBody.children.length].remove();
   }
 
   let fade_time = msg.textContent.length/3;
@@ -149,20 +192,19 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
     msg_time = expectedEndTime;
   }
 
+  // window.obsstudio.getCurrentScene(scene => {
+  //   if (scene.name === 'Desktop') {
+  //     document.documentElement.classList.add('Desktop');
+  //     chatMSG.style.animation = `fadeOut forwards 1s ${fade_time}s`;
+  //   }
+  // });
   chatMSG.style.animation = `fadeOut forwards 1s ${fade_time}s`;
 
-  // delete chat message after maxMsgTime has passed
-  setTimeout(function(){
-      chatMSG.classList.add('messages');
-      setTimeout(function(){chatMSG.remove();},1000);
-  },maxMsgTime*1000);
 }
 
 // Basic parse function from twitch
 function parse_tags(tags) {
   let parsed_tags = tags.split(';');
-
-
   parsed_tags.forEach(tag => {
     let tag_key = tag.split('=');
     let tag_val = (tag_key[1] === '') ? null : tag_key[1];
@@ -200,8 +242,6 @@ function parse_tags(tags) {
   })
   // creates an empty list if returns null
   parsed_tags['emotes'] ??= {};
-
-  console.log("parsed_tags: ", parsed_tags);
   return parsed_tags;
 }
 
