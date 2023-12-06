@@ -15,9 +15,11 @@ setTimeout(()=>{
 //5) make chat stay on-screen in webcam only scene
 //6) sometimes "!" commands don't work after timeouts/bans?
 //7) specialized chat commands for this bot
-//    !first, !timer, 
+//    !first, !timer,
 //8) make randomized memes play correctly (schwarzenoises, etc.)
 //9) make memes play sequentially
+//10) /me shows "ACTION" in chatmsg
+//11) allow chatters to opt out of showing up on stream-chat
 
 
 
@@ -32,8 +34,8 @@ setTimeout(()=>{
 
 const channelName = 'quantumapprentice';
 const TwitchWebSocketUrl = 'wss://irc-ws.chat.twitch.tv:443';
-const maxMsgCount = 5;
-const maxMsgTime  = 30;
+const maxMsgCount = 10;
+let   current_obs_scene   = '';
 
 /** @type {HTMLSpanElement|null} */
 const chatBody = (document.querySelector("#ChatMessages"));
@@ -60,6 +62,7 @@ wsTwitch.onopen = ()=>{
 wsTwitch.onmessage = (fullmsg) => {
   // console.log("fullmsg: ", fullmsg);
   let txt = fullmsg.data;
+  // console.log("txt: ", txt);
   let name = '';
   let outmsg = '';
   let indx = 0;
@@ -75,7 +78,6 @@ wsTwitch.onmessage = (fullmsg) => {
     get_emote_list(tags_obj['emotes'], emote_list);
   }
 
-
   if (txt[indx] == ':') {
     // get the important data positions
     let pos1 = txt.indexOf('@', indx) + 1;
@@ -86,7 +88,8 @@ wsTwitch.onmessage = (fullmsg) => {
     // create strings based on those positions
     name = txt.substring(pos1, pos2).trim();
 
-    if ((name == ":tmi") || (name == "justinfan6969")
+    if ((name == ":tmi")
+      || (name == "justinfan6969")
       || (name.includes("@emote-only=0;"))
       || (name == ":justinfan6969"))
       { return; }
@@ -178,28 +181,9 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
   if (chatBody.children.length > maxMsgCount) {
     // if more than maxMsgCount, delete first message
     chatBody.lastElementChild.remove();
-    // chatBody.children[chatBody.children.length].remove();
   }
 
-  let fade_time = msg.textContent.length/3;
-
-  fade_time = Math.max(10, Math.min(30, fade_time));
-  let expectedEndTime = performance.now() + 1000 * fade_time;
-  if (expectedEndTime < msg_time) {
-    fade_time = (msg_time - performance.now())/1000;
-  }
-  else {
-    msg_time = expectedEndTime;
-  }
-
-  // window.obsstudio.getCurrentScene(scene => {
-  //   if (scene.name === 'Desktop') {
-  //     document.documentElement.classList.add('Desktop');
-  //     chatMSG.style.animation = `fadeOut forwards 1s ${fade_time}s`;
-  //   }
-  // });
-  chatMSG.style.animation = `fadeOut forwards 1s ${fade_time}s`;
-
+  animate_message(chatMSG, true);
 }
 
 // Basic parse function from twitch
@@ -277,3 +261,144 @@ function esc_html(s) {
 
   return el.innerHTML;
 }
+
+// EventListener to detect OBS scene change
+// Changes chat msg class based on current scene
+function register_obs_handling()
+{
+  if (!window.obsstudio) return;
+  window.addEventListener('obsSceneChanged', event => {
+    // console.log("Bot: scene name: ", event.detail.name);
+    current_obs_scene = event.detail.name;
+    update_chat_animaton();
+  })
+
+  update_current_scene();
+
+  // window.obsstudio.getCurrentScene( scene => {
+  //   // display_msg("Bot: ", scene, '', '');
+  //   // console.log("Bot: scene name: ", scene.name);
+  //   if (scene.name === 'Cam Only') {
+  //     document.documentElement.classList.add('obs-scene-cam-only');
+  //   }
+  // })
+  // window.addEventListener('obsSceneChanged', event => {
+  //   if (event.detail.name === 'Cam Only') {
+  //     document.documentElement.classList.add('obs-scene-cam-only');
+  //   }
+  //   else {
+  //     document.documentElement.classList.remove('obs-scene-cam-only');
+  //   }
+  //   // console.log("Bot: scene name: ", event.detail.name);
+  //   // display_msg("Bot: ", event.detail.name, '', '');
+  // })
+}
+register_obs_handling();
+
+//initialize scene name to global variable
+function update_current_scene()
+{
+  window.obsstudio.getCurrentScene( scene => {
+    // console.log("Bot: scene name: ", scene.name);
+    current_obs_scene = scene.name;
+  })
+}
+
+//turn all chat message fadeout animation on/off
+//based on current_obs_scene
+function update_chat_animaton()
+{
+  let chatMSGs = document.getElementsByClassName('message_box');
+  // console.log("chatMSGs", chatMSGs);
+  for (const msg_box of chatMSGs) {
+    // console.log("msg_box", msg_box);
+    animate_message(msg_box);
+  }
+}
+
+function animate_message(msg_box, is_new_msg=false)
+{
+  if (current_obs_scene === 'Cam Only') {
+    // msg_box.style.animation = 'none';
+    msg_box.style.animation = is_new_msg ? 'fadeIn 1s' : 'none';
+    return;
+  }
+
+  let msg_txt = msg_box.querySelector('.Message');
+  // console.log("chat_message_div", msg_div);
+
+  let fade_time = msg_txt.textContent.length/3;
+
+  fade_time = Math.max(10, Math.min(30, fade_time));
+  let expectedEndTime = performance.now() + 1000 * fade_time;
+  if (expectedEndTime < msg_time) {
+    fade_time = (msg_time - performance.now())/1000;
+  }
+  else {
+    msg_time = expectedEndTime;
+  }
+
+  if (is_new_msg) {
+    msg_box.style.animation = `fadeIn 1s, fadeOut forwards 1s ${fade_time}s`;
+  }
+  else {
+    msg_box.style.animation = `fadeOut forwards 1s ${fade_time}s`;
+  }
+}
+
+
+
+//You have three situations where you 
+//need to deal with animation: 
+//1)when a chat message is received,
+//2)when you switch to cam only, 
+//3)and when you switch away from cam only
+
+//When you receive a chat message, you 
+//need to check if you're in the cam only
+//scene and not set the animation
+//(and set it if you're on another scene)
+
+//When you switch to cam only, you need 
+//to go through the elements and remove 
+//the animation
+
+//When you switch away from cam only, 
+//you need to recalculate the animations 
+//and set it on the elements again
+
+//a) use a global with the current scene name 
+//(or at least a boolean for whether 
+//or not the messages should be fading out)
+//The reason for this is because you have 
+//an event handler that handles whenever 
+//the scene changes, and you can retrieve 
+//it once, and then you have direct access 
+//to it all of the time without having to 
+//wait for a callback or a promise to 
+//resolve as in the case of asking for the 
+//scene name again whenever you receive a 
+//new chat message
+
+//Then b) I would make a new function to 
+//deal with updating one of the message_box 
+//elements with the appropriate animation 
+//style, depending on that global variable
+//Importantly, it would take the element and 
+//nothing else - it can calculate the "length" 
+//of the message by inspecting the 
+//innerText / textContent of the element 
+//instead of the incoming chat message directly
+//This is because when you're dealing with 
+//the scene changes, you don't have direct 
+//access to the chat messages anymore, so 
+//the calculation becomes consistent everywhere
+
+//Then c) Update the incoming chat message handler 
+//and scene change handlers to pass the elements 
+//into that function
+//That function can also deal with the short-text 
+//after long text thing, and still use that 
+//msg_time global, etc
+
+
