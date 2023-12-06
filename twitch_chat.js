@@ -105,6 +105,9 @@ wsTwitch.onmessage = (fullmsg) => {
       }
     }
     else {
+
+
+
       // display string on stream
       display_msg(name, outmsg, tags_obj, emote_list);
     }
@@ -139,17 +142,27 @@ function timer(time)
 let msg_time = 0;
 // display chat message on stream
 function display_msg(name, outmsg, tags_obj, emote_list) {
+
+  // let msg_is_emote = false;
   let emote;
   let chatMSG = document.createElement("div");
+
+  if (outmsg.startsWith('\x01ACTION')) {
+    outmsg = outmsg.substring(7, outmsg.length - 1).trim();
+    // msg_is_emote = true;
+
+    chatMSG.classList.add('msg_is_emote');
+  }
 
   let auth = document.createElement("div");
   auth.classList.add("Name");
 
   if (tags_obj['color']) {
-    auth.style.color = tags_obj['color'];
+    // auth.style.color = tags_obj['color'];
+    chatMSG.style.setProperty('--name-color', tags_obj['color']);
   }
 
-  auth.textContent = tags_obj['display_name'] || name;
+  auth.textContent = (tags_obj['display_name'] || name) + ' ';
 
   if (tags_obj['emotes']) {
       let parts = [];
@@ -171,7 +184,6 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
   let msg = document.createElement("div");
   msg.classList.add("Message");
   msg.innerHTML = outmsg;
-
 
   chatMSG.append(auth, msg);
   // chat message has to be prepended to appear on bottom

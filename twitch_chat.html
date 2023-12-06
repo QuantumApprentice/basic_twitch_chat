@@ -6,6 +6,10 @@
         content="width=device-width, initial-scale=1.0">
   <title>Twitch Chat</title>
   <style>
+    *{
+      /* padding and border included in width when sizing */
+      box-sizing: border-box;
+    }
     @keyframes fadeOut {
       0% {
         opacity: 1;
@@ -42,20 +46,27 @@
     }
     .Name {
       font-family: "Fira Code"; font-weight: 500;
-      color: hotpink;
+      color: var(--name-color);
       font-size: 20px;
-      padding-left: 10px;
+      /* padding-left: 10px; */
     }
     .Message {
       font-family: "Fira Code"; font-weight: 500;
       color: lightblue;
-      padding: 0px 10px 10px 10px;
       font-size: 25px;
     }
     .message_box {
+      --name-color: hotpink;
       width: 400px;
       background-color: rgba(0, 0, 0, .8);
       border-radius: 5px;
+      padding: 0px 10px 10px 10px;
+    } 
+    .msg_is_emote .Name, .msg_is_emote .Message {
+      color: var(--name-color);
+      font-size: 20px;
+      font-style: italic;
+      display: inline;
     }
 
   </style>
@@ -69,3 +80,13 @@
 
 </body>
 </html>
+
+
+
+<!-- 
+So in your #ChatMessages block, you could say 
+--name-color: hotpink;
+Then your .Name could use color: var(--name-color)
+Then in the JS, when you create the message box,
+ assign the property to that specific chat message,
+ chat_msg.style.setProperty('--name-color', user_color) -->
