@@ -8,20 +8,20 @@ setTimeout(()=>{
 }, 10000);
 
 //other things to do to this before it's done
-//1) chat name needs to match color in chatbox
+//1) *FIXED* chat name needs to match color in chatbox
 //2) auto-translate chat from other languages?
 //3) make on-screen chat messages dissappear when deleted
 //4) make on-screen chat msgs disappear when ban/timeout
-//5) make chat stay on-screen in webcam only scene
+//5) *FIXED* make chat stay on-screen in webcam only scene
 //6) sometimes "!" commands don't work after timeouts/bans?
 //7) specialized chat commands for this bot
 //    !first, !timer,
 //8) make randomized memes play correctly (schwarzenoises, etc.)
 //9) make memes play sequentially
-//10) /me shows "ACTION" in chatmsg
-//11) allow chatters to opt out of showing up on stream-chat
-
-
+//10) *FIXED* /me shows "ACTION" in chatmsg
+//11) *FIXED* allow chatters to opt out of showing up on stream-chat
+//12) *FIXED* parse "!" commands to allow subsequent text to show
+//13) add !magic8ball back into chatbot
 
 // window.addEventListener('obsStreamingStarted', ()=>{
 //   if (!wsOBS) wsOBS = OBS_connect();
@@ -34,8 +34,10 @@ setTimeout(()=>{
 
 const channelName = 'quantumapprentice';
 const TwitchWebSocketUrl = 'wss://irc-ws.chat.twitch.tv:443';
-const maxMsgCount = 10;
-let   current_obs_scene   = '';
+const maxMsgCount        = 10;
+let   current_obs_scene  = '';
+let   timer_running      = false;
+let   optout_list        = [];
 
 /** @type {HTMLSpanElement|null} */
 const chatBody = (document.querySelector("#ChatMessages"));
@@ -97,18 +99,25 @@ wsTwitch.onmessage = (fullmsg) => {
     outmsg = txt.substring(pos3).trim();
     // check if its a bot command
     if (outmsg[0] == '!') {
-      play_clip_items(wsOBS, outmsg.slice(1).trim());
-      // new timer countdown function
-      if (outmsg.slice(1).trim() == "timer") {
-        let remind_time = 1000*60*10;
-        timer(remind_time);
+      let bot_cmd;
+      let spc_indx = outmsg.indexOf(' ');
+      if (spc_indx >= 0) {
+        bot_cmd = outmsg.substring(1,spc_indx);
+      }
+      else {
+        bot_cmd = outmsg.substring(1);
+        outmsg = '';
+      }
+
+      //play memes if its a meme
+      let played = play_clip_items(wsOBS, bot_cmd);
+      if (!played) {
+        //else play other commands
+        other_bot_commands(bot_cmd, name);
       }
     }
-    else {
-
-
-
-      // display string on stream
+    // display string on stream if not empty
+    if (outmsg && !optout_list.includes(name)) {
       display_msg(name, outmsg, tags_obj, emote_list);
     }
   }
@@ -127,6 +136,28 @@ wsTwitch.onmessage = (fullmsg) => {
   }
 }
 
+function other_bot_commands(bot_cmd, name)
+{
+  // new timer countdown function
+  // used to remind me I'm cooking stuff in the kitchen
+  if (bot_cmd == "timer") {
+    if (!timer_running) {
+      timer_running = true;
+      let remind_time = 1000*60*10;
+      timer(remind_time);
+    }
+  }
+  if (bot_cmd == "optout") {
+    optout_list.push(name);
+  }
+  if (bot_cmd == "optin") {
+    optout_list.pop(name);
+  }
+  if (bot_cmd == "magic8ball") {
+    // let mgc8ball = fetch()
+  }
+}
+
 function timer(time)
 {
   setTimeout(()=>{
@@ -135,6 +166,7 @@ function timer(time)
     play_clip_items(wsOBS, "cookie");
     play_clip_items(wsOBS, "nothing");
     play_clip_items(wsOBS, "choppa");
+    timer_running = false;
     }, time);
 }
 
@@ -171,6 +203,9 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
     for (let i = emote_list.length; --i >= 0; ) {
       emote = document.createElement("img");
       emote.setAttribute('src', emote_list[i].url);
+      if (i!==0) {
+        emote.style = 'margin-left: -14px';
+      }
 
       let last_half = esc_html(outmsg.slice(emote_list[i].end + 1, end_indx));
       parts.unshift(last_half);
@@ -357,60 +392,3 @@ function animate_message(msg_box, is_new_msg=false)
     msg_box.style.animation = `fadeOut forwards 1s ${fade_time}s`;
   }
 }
-
-
-
-//You have three situations where you 
-//need to deal with animation: 
-//1)when a chat message is received,
-//2)when you switch to cam only, 
-//3)and when you switch away from cam only
-
-//When you receive a chat message, you 
-//need to check if you're in the cam only
-//scene and not set the animation
-//(and set it if you're on another scene)
-
-//When you switch to cam only, you need 
-//to go through the elements and remove 
-//the animation
-
-//When you switch away from cam only, 
-//you need to recalculate the animations 
-//and set it on the elements again
-
-//a) use a global with the current scene name 
-//(or at least a boolean for whether 
-//or not the messages should be fading out)
-//The reason for this is because you have 
-//an event handler that handles whenever 
-//the scene changes, and you can retrieve 
-//it once, and then you have direct access 
-//to it all of the time without having to 
-//wait for a callback or a promise to 
-//resolve as in the case of asking for the 
-//scene name again whenever you receive a 
-//new chat message
-
-//Then b) I would make a new function to 
-//deal with updating one of the message_box 
-//elements with the appropriate animation 
-//style, depending on that global variable
-//Importantly, it would take the element and 
-//nothing else - it can calculate the "length" 
-//of the message by inspecting the 
-//innerText / textContent of the element 
-//instead of the incoming chat message directly
-//This is because when you're dealing with 
-//the scene changes, you don't have direct 
-//access to the chat messages anymore, so 
-//the calculation becomes consistent everywhere
-
-//Then c) Update the incoming chat message handler 
-//and scene change handlers to pass the elements 
-//into that function
-//That function can also deal with the short-text 
-//after long text thing, and still use that 
-//msg_time global, etc
-
-

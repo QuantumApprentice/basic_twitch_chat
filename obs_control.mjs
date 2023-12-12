@@ -66,21 +66,23 @@ function close_clip_items(wsOBS, obj) {
 //TODO: add a queue for the clips to play
 //    one at a time
 export function play_clip_items(wsOBS, clipname) {
-  if (clipSceneItemList[clipname]) {
-    let play_clip = {
-      "op": 6,
-      "d" : {
-        "requestType"  : "SetSceneItemEnabled",
-        "requestId"    : "Quantum Bot",
-        "requestData"  : {
-          "sceneName"  : "Clips",
-          "sceneItemId": clipSceneItemList[clipname],
-          "sceneItemEnabled": true
-        }
+  if (!clipSceneItemList[clipname]) {
+    return false;
+  }
+  let play_clip = {
+    "op": 6,
+    "d" : {
+      "requestType"  : "SetSceneItemEnabled",
+      "requestId"    : "Quantum Bot",
+      "requestData"  : {
+        "sceneName"  : "Clips",
+        "sceneItemId": clipSceneItemList[clipname],
+        "sceneItemEnabled": true
       }
     }
-    wsOBS.send(JSON.stringify(play_clip));
   }
+  wsOBS.send(JSON.stringify(play_clip));
+  return true;
 }
 
 function parse_clip_items(wsOBS) {
