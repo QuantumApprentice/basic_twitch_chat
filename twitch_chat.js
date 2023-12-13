@@ -1,15 +1,39 @@
 // @ts-nocheck
-import {OBS_connect, play_clip_items} from "./obs_control.mjs"
-let wsOBS = OBS_connect();
+let magic8ball;
+let OBS_connect, play_clip_items;
+let wsOBS;
+async function load_modules()
+{
+  try {
+    ({magic8ball} = await import("./magic8ball.js"));
+  } catch (error) {
+    console.log(error);
+  }
 
-setTimeout(()=>{
-  if (wsOBS.readyState != 1)
+  try {
+    // import {OBS_connect, play_clip_items} from "./obs_control.mjs";
+    ({OBS_connect, play_clip_items} = await import("./obs_control.mjs"));
+  } catch (error) {
+    console.log(error);
+  }
+}
+await load_modules();
+
+if (OBS_connect) {
   wsOBS = OBS_connect();
-}, 10000);
+
+  setTimeout(()=>{
+    if (wsOBS.readyState != 1)
+    wsOBS = OBS_connect();
+  }, 10000);
+}
+
+
 
 //other things to do to this before it's done
 //1) *FIXED* chat name needs to match color in chatbox
 //2) auto-translate chat from other languages?
+//2a)auto-translate captions to other languages?
 //3) make on-screen chat messages dissappear when deleted
 //4) make on-screen chat msgs disappear when ban/timeout
 //5) *FIXED* make chat stay on-screen in webcam only scene
@@ -22,6 +46,9 @@ setTimeout(()=>{
 //11) *FIXED* allow chatters to opt out of showing up on stream-chat
 //12) *FIXED* parse "!" commands to allow subsequent text to show
 //13) add !magic8ball back into chatbot
+//14) long strings of letters with no break will not wrap
+//15) !tts add text to speech back in
+
 
 // window.addEventListener('obsStreamingStarted', ()=>{
 //   if (!wsOBS) wsOBS = OBS_connect();
@@ -36,14 +63,11 @@ const channelName = 'quantumapprentice';
 const TwitchWebSocketUrl = 'wss://irc-ws.chat.twitch.tv:443';
 const maxMsgCount        = 10;
 let   current_obs_scene  = '';
-let   timer_running      = false;
-let   optout_list        = [];
+
 
 /** @type {HTMLSpanElement|null} */
 const chatBody = (document.querySelector("#ChatMessages"));
-
 const wsTwitch = new WebSocket(TwitchWebSocketUrl);
-
 wsTwitch.onopen = ()=>{
     wsTwitch.send(`CAP REQ :twitch.tv/commands twitch.tv/tags`);
     wsTwitch.send(`NICK justinfan6969`);
@@ -60,6 +84,7 @@ wsTwitch.onopen = ()=>{
 //     }
 //     chatmsg.innerText += x;
 // };
+
 
 wsTwitch.onmessage = (fullmsg) => {
   // console.log("fullmsg: ", fullmsg);
@@ -97,11 +122,11 @@ wsTwitch.onmessage = (fullmsg) => {
       { return; }
 
     outmsg = txt.substring(pos3).trim();
-    // check if its a bot command
+    // check if its a bot command and handle
     if (outmsg[0] == '!') {
       let bot_cmd;
       let spc_indx = outmsg.indexOf(' ');
-      if (spc_indx >= 0) {
+      if (spc_indx > 0) {
         bot_cmd = outmsg.substring(1,spc_indx);
       }
       else {
@@ -110,11 +135,17 @@ wsTwitch.onmessage = (fullmsg) => {
       }
 
       //play memes if its a meme
-      let played = play_clip_items(wsOBS, bot_cmd);
+      let played = false;
+      if (play_clip_items) {
+        played = play_clip_items(wsOBS, bot_cmd);
+      }
+
       if (!played) {
         //else play other commands
         other_bot_commands(bot_cmd, name);
       }
+
+
     }
     // display string on stream if not empty
     if (outmsg && !optout_list.includes(name)) {
@@ -130,12 +161,14 @@ wsTwitch.onmessage = (fullmsg) => {
     outmsg = txt.slice(pos2).trim();
 
     if (name == 'PING') {
-      console.log('PONG ' + outmsg);
+      // console.log('PONG ' + outmsg);
       wsTwitch.send('PONG ' + outmsg);
     }
   }
 }
 
+let timer_running = false;
+let optout_list   = [];
 function other_bot_commands(bot_cmd, name)
 {
   // new timer countdown function
@@ -154,20 +187,26 @@ function other_bot_commands(bot_cmd, name)
     optout_list.pop(name);
   }
   if (bot_cmd == "magic8ball") {
-    // let mgc8ball = fetch()
+    if (magic8ball) {
+      display_msg(`🎱: ${name}`, magic8ball());
+  // wsTwitch.send(`PRIVMSG #${channelName} : ${magic8ball_arr[rnd]}`);
+
+    }
   }
 }
 
 function timer(time)
 {
-  setTimeout(()=>{
-    //need to send message to chat too
-    play_clip_items(wsOBS, "khan");
-    play_clip_items(wsOBS, "cookie");
-    play_clip_items(wsOBS, "nothing");
-    play_clip_items(wsOBS, "choppa");
-    timer_running = false;
-    }, time);
+  if (play_clip_items) {
+    setTimeout(()=>{
+      //need to send message to chat too
+      play_clip_items(wsOBS, "khan");
+      play_clip_items(wsOBS, "cookie");
+      play_clip_items(wsOBS, "nothing");
+      play_clip_items(wsOBS, "choppa");
+      timer_running = false;
+      }, time);
+  }
 }
 
 // global msg_time to set timeouts on messages
@@ -189,14 +228,14 @@ function display_msg(name, outmsg, tags_obj, emote_list) {
   let auth = document.createElement("div");
   auth.classList.add("Name");
 
-  if (tags_obj['color']) {
+  if (tags_obj?.color) {
     // auth.style.color = tags_obj['color'];
     chatMSG.style.setProperty('--name-color', tags_obj['color']);
   }
 
-  auth.textContent = (tags_obj['display_name'] || name) + ' ';
+  auth.textContent = (tags_obj?.display_name || name) + ' ';
 
-  if (tags_obj['emotes']) {
+  if (tags_obj?.emotes) {
       let parts = [];
       let end_indx = outmsg.length;
 
