@@ -5,7 +5,7 @@ export function OBS_connect() {
   const OBSWebSocketURL = 'ws://127.0.0.1:4455';
   const wsOBS = new WebSocket(OBSWebSocketURL, 'obswebsocket.json');
 
-  wsOBS.onopen = console.log;
+  wsOBS.onopen  = console.log;
   wsOBS.onclose = console.log;
   wsOBS.onerror = console.log;
 
@@ -46,19 +46,47 @@ export function OBS_connect() {
 
 function close_clip_items(wsOBS, obj) {
   if (obj.d.eventType == "MediaInputPlaybackEnded") {
-    let stop_media = {
-      "op": 6,
-      "d" : {
-        "requestType"  : "SetSceneItemEnabled",
+    let request = {
+      "op" : 8,
+      "d"  : {
         "requestId"    : "Quantum Bot",
-        "requestData"  : {
-          "sceneName"  : "Clips",
-          "sceneItemId": clipSceneItemList[obj.d.eventData.inputName],
-          "sceneItemEnabled": false
-        }
+        "haltOnFailure": false,
+        "requests": [
+          {   //turn monitoring off (prevents audio sources from staying open)
+            "requestType": "SetInputAudioMonitorType",
+            "requestId"  : "Quantum Bot",
+            "requestData": {
+              "inputName"  : obj.d.eventData.inputName,
+              "monitorType": "OBS_MONITORING_TYPE_NONE"
+            }
+          },
+          {   //disable scene item (close video)
+            "requestType"  : "SetSceneItemEnabled",
+            "requestId"    : "Quantum Bot",
+            "requestData"  : {
+              "sceneName"  : "Clips",
+              "sceneItemId": clipSceneItemList[obj.d.eventData.inputName],
+              "sceneItemEnabled": false,
+            }
+          }
+        ]
       }
     }
-    wsOBS.send(JSON.stringify(stop_media));
+    wsOBS.send(JSON.stringify(request));
+
+    // let stop_media = {
+    //   "op": 6,
+    //   "d" : {
+    //     "requestType"  : "SetSceneItemEnabled",
+    //     "requestId"    : "Quantum Bot",
+    //     "requestData"  : {
+    //       "sceneName"  : "Clips",
+    //       "sceneItemId": clipSceneItemList[obj.d.eventData.inputName],
+    //       "sceneItemEnabled": false,
+    //     }
+    //   }
+    // }
+    // wsOBS.send(JSON.stringify(stop_media));
   }
 }
 
@@ -66,23 +94,49 @@ function close_clip_items(wsOBS, obj) {
 //TODO: add a queue for the clips to play
 //    one at a time
 export function play_clip_items(wsOBS, clipname) {
-  if (!clipSceneItemList[clipname]) {
+
+  if (clipSceneItemList[clipname]) {
+    play_clip(wsOBS, clipname);
+  } else if (clipname == "schwarzenoises") {
+    play_clip(wsOBS, "sch-back");
+    play_clip(wsOBS, "sch-airplane");
+    play_clip(wsOBS, "sch-legs");
+    play_clip(wsOBS, "sch-lungs");
+    play_clip(wsOBS, "sch-body");
+    play_clip(wsOBS, "sch-groin");
+  } else {
     return false;
   }
-  let play_clip = {
-    "op": 6,
-    "d" : {
-      "requestType"  : "SetSceneItemEnabled",
+
+  return true;
+}
+
+function play_clip(wsOBS, clipname)
+{
+  let request = {
+    "op" : 8,
+    "d"  : {
       "requestId"    : "Quantum Bot",
-      "requestData"  : {
-        "sceneName"  : "Clips",
-        "sceneItemId": clipSceneItemList[clipname],
-        "sceneItemEnabled": true
-      }
+      "haltOnFailure": false,
+      "requests": [
+        {       //play the clip
+          "requestType"  : "SetSceneItemEnabled",
+          "requestData"  : {
+            "sceneName"  : "Clips",
+            "sceneItemId": clipSceneItemList[clipname],
+            "sceneItemEnabled": true
+          }
+        }, {    //set audio to monitoring (so I can hear the audio)
+          "requestType": "SetInputAudioMonitorType",
+          "requestData": {
+            "inputName"  : clipname,
+            "monitorType": "OBS_MONITORING_TYPE_MONITOR_ONLY"
+          }
+        }
+      ]
     }
   }
-  wsOBS.send(JSON.stringify(play_clip));
-  return true;
+  wsOBS.send(JSON.stringify(request));
 }
 
 function parse_clip_items(wsOBS) {

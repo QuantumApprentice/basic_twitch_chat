@@ -1,5 +1,5 @@
 // @ts-nocheck
-let magic8ball;
+let magic8ball, play_memes;
 let OBS_connect, play_clip_items;
 let wsOBS;
 async function load_modules()
@@ -13,6 +13,12 @@ async function load_modules()
   try {
     // import {OBS_connect, play_clip_items} from "./obs_control.mjs";
     ({OBS_connect, play_clip_items} = await import("./obs_control.mjs"));
+  } catch (error) {
+    console.log(error);
+  }
+
+  try {
+    ({play_memes} = await import ('./memes_overlay.js'));
   } catch (error) {
     console.log(error);
   }
@@ -45,9 +51,14 @@ if (OBS_connect) {
 //10) *FIXED* /me shows "ACTION" in chatmsg
 //11) *FIXED* allow chatters to opt out of showing up on stream-chat
 //12) *FIXED* parse "!" commands to allow subsequent text to show
-//13) add !magic8ball back into chatbot
+//13) add !magic8ball back into chatbot (need bot account access)
 //14) long strings of letters with no break will not wrap
 //15) !tts add text to speech back in
+
+//TODO: Try this stuff:
+//1)  *FIXED* Set OBS to turn the "Monitor" setting on clips on while playing, off otherwise
+//2)  Import the clip into OBS before playing it, then remove it after
+//3)  Write something that allows the web-page to play the clip instead
 
 
 // window.addEventListener('obsStreamingStarted', ()=>{
@@ -59,7 +70,7 @@ if (OBS_connect) {
 //   wsOBS = OBS_Connect();
 // }
 
-const channelName = 'quantumapprentice';
+const channelName        = 'quantumapprentice';
 const TwitchWebSocketUrl = 'wss://irc-ws.chat.twitch.tv:443';
 const maxMsgCount        = 10;
 let   current_obs_scene  = '';
@@ -138,6 +149,7 @@ wsTwitch.onmessage = (fullmsg) => {
       let played = false;
       if (play_clip_items) {
         played = play_clip_items(wsOBS, bot_cmd);
+        // played = play_memes(bot_cmd);
       }
 
       if (!played) {
@@ -184,14 +196,28 @@ function other_bot_commands(bot_cmd, name)
     optout_list.push(name);
   }
   if (bot_cmd == "optin") {
-    optout_list.pop(name);
+    let idx = optout_list.indexOf(name);
+    if (idx >= 0) {
+      optout_list.splice(idx, 1);
+    }
   }
   if (bot_cmd == "magic8ball") {
     if (magic8ball) {
       display_msg(`🎱: ${name}`, magic8ball());
   // wsTwitch.send(`PRIVMSG #${channelName} : ${magic8ball_arr[rnd]}`);
-
     }
+  }
+  // if (["specs", "pc", "rig", "pooter"].includes(bot_cmd)) {}
+  if (bot_cmd == "specs" || bot_cmd == "pc" || bot_cmd == "rig" || bot_cmd == "pooter")  {
+    display_msg(
+      "CPU: AMD Ryzen 7 7800X3D 8-core 4.2GHz, \n"      +
+      "CPU Cooler: Thermalright PS120SE, \n"            +
+      "GFX: nVidia RTX 4060, \n"                        +
+      "MOBO: ASRock B650M Pro RS AM5, \n"               +
+      "RAM: 32GB G.Skill Flare X5 Series, \n"           +
+      "HD: WD_BLACK SN850X NVMe M.2 2280 1TB PCIe, \n"  +
+      "PSU: Corsair RM750e ATX"
+    )
   }
 }
 
@@ -212,7 +238,8 @@ function timer(time)
 // global msg_time to set timeouts on messages
 let msg_time = 0;
 // display chat message on stream
-function display_msg(name, outmsg, tags_obj, emote_list) {
+function display_msg(name, outmsg, tags_obj, emote_list)
+{
 
   // let msg_is_emote = false;
   let emote;
@@ -430,4 +457,13 @@ function animate_message(msg_box, is_new_msg=false)
   else {
     msg_box.style.animation = `fadeOut forwards 1s ${fade_time}s`;
   }
+}
+
+//sanitize function (not currently in use)
+function sanitizeMessage(message) {
+  message = message.replace(/(<([^>]+)>)/ig, '').trim();
+  if(message.length < 1) {
+      message = '&lt;/&gt;';
+  }
+  return message;
 }
