@@ -1,6 +1,6 @@
 // @ts-nocheck
 let magic8ball, play_memes;
-let OBS_connect, play_clip_items;
+let OBS_connect, play_clip_items, ban_meme_item, meme_is_banned, clear_banned_memes;
 let wsOBS;
 async function load_modules()
 {
@@ -11,8 +11,11 @@ async function load_modules()
   }
 
   try {
-    // import {OBS_connect, play_clip_items} from "./obs_control.mjs";
-    ({OBS_connect, play_clip_items} = await import("./obs_control.mjs"));
+    ({OBS_connect,
+      play_clip_items,
+      ban_meme_item,
+      clear_banned_memes,
+      meme_is_banned } = await import("./obs_control.mjs"));
   } catch (error) {
     console.log(error);
   }
@@ -54,21 +57,13 @@ if (OBS_connect) {
 //13) add !magic8ball back into chatbot (need bot account access)
 //14) long strings of letters with no break will not wrap
 //15) !tts add text to speech back in
+//16) obs crashes when memes are played while working on any part of the chat interface
 
 //TODO: Try this stuff:
 //1)  *FIXED* Set OBS to turn the "Monitor" setting on clips on while playing, off otherwise
 //2)  Import the clip into OBS before playing it, then remove it after
 //3)  Write something that allows the web-page to play the clip instead
 
-
-// window.addEventListener('obsStreamingStarted', ()=>{
-//   if (!wsOBS) wsOBS = OBS_connect();
-// })
-// if(window.obsstudio?.pluginVersion) {
-//   window.addEventListener('obsStreamingStarted', ...);
-// } else {
-//   wsOBS = OBS_Connect();
-// }
 
 const channelName        = 'quantumapprentice';
 const TwitchWebSocketUrl = 'wss://irc-ws.chat.twitch.tv:443';
@@ -118,13 +113,15 @@ wsTwitch.onmessage = (fullmsg) => {
 
   if (txt[indx] == ':') {
     // get the important data positions
-    let pos1 = txt.indexOf('@', indx) + 1;
-    let pos2 = txt.indexOf(".", pos1);
-    let pos3 = txt.indexOf(`#${channelName}`)+2;
-    pos3 += channelName.length + 1;
+    let name_strt = txt.indexOf('@', indx) + 1;
+    let name_end  = txt.indexOf(".", name_strt);
 
-    // create strings based on those positions
-    name = txt.substring(pos1, pos2).trim();
+    // place msg_idx at the beginning of the
+    // first character of the message
+    let msg_idx = txt.indexOf(`#${channelName}`) + channelName.length +3;
+
+    // create name based on start/end positions
+    name = txt.substring(name_strt, name_end).trim();
 
     if ((name == ":tmi")
       || (name == "justinfan6969")
@@ -132,7 +129,11 @@ wsTwitch.onmessage = (fullmsg) => {
       || (name == ":justinfan6969"))
       { return; }
 
-    outmsg = txt.substring(pos3).trim();
+    outmsg = txt.substring(msg_idx).trim();
+
+    // custom rewards have to have special parsing
+    handle_custom_reward(tags_obj, outmsg);
+
     // check if its a bot command and handle
     if (outmsg[0] == '!') {
       let bot_cmd;
@@ -148,8 +149,7 @@ wsTwitch.onmessage = (fullmsg) => {
       //play memes if its a meme
       let played = false;
       if (play_clip_items) {
-        played = play_clip_items(wsOBS, bot_cmd);
-        // played = play_memes(bot_cmd);
+        ({played, outmsg} = handle_obs_control(bot_cmd, name));
       }
 
       if (!played) {
@@ -179,6 +179,52 @@ wsTwitch.onmessage = (fullmsg) => {
   }
 }
 
+// return string with time in
+// hours minutes seconds (hms)
+function convert_to_hms(time)
+{
+  const current_time = Date.now();
+  const diff = time - current_time;
+
+  const seconds = Math.floor(diff/1000);  //ms per s
+  const minutes = Math.floor(seconds/60); //s per min
+  const hours   = Math.floor(minutes/60); //min per h
+
+  const time_left = `${hours}h${minutes % 60}m${seconds % 60}s`;
+  return time_left;
+}
+
+function handle_obs_control(bot_cmd, name)
+{
+  let outmsg, played;
+  if (meme_is_banned(bot_cmd)) {
+    let ban_time = convert_to_hms(meme_is_banned(bot_cmd));
+    outmsg = `!${bot_cmd} This meme is banned for ${ban_time}`;
+  } else {
+    played = play_clip_items(wsOBS, bot_cmd);
+
+    //TODO: why do I have this here?
+    // played = play_memes(bot_cmd);
+  }
+  if (bot_cmd == "clearmemebans") {
+    if (name == channelName) {
+      clear_banned_memes();
+    }
+  }
+  return {played, outmsg};
+}
+
+function handle_custom_reward(tags_obj, outmsg)
+{
+  const id = tags_obj.custom_reward_id;
+  // this custom reward id is for banning memes temporarily
+  if (id === "495a4bcf-5033-42c0-b9bb-93aca4bcf7ae") {
+    if (ban_meme_item) {
+      ban_meme_item(outmsg);
+    }
+  }
+}
+
 let timer_running = false;
 let optout_list   = [];
 function other_bot_commands(bot_cmd, name)
@@ -188,7 +234,7 @@ function other_bot_commands(bot_cmd, name)
   if (bot_cmd == "timer") {
     if (!timer_running) {
       timer_running = true;
-      let remind_time = 1000*60*10;
+      let remind_time = 1000*60;
       timer(remind_time);
     }
   }
@@ -204,7 +250,7 @@ function other_bot_commands(bot_cmd, name)
   if (bot_cmd == "magic8ball") {
     if (magic8ball) {
       display_msg(`🎱: ${name}`, magic8ball());
-  // wsTwitch.send(`PRIVMSG #${channelName} : ${magic8ball_arr[rnd]}`);
+      // wsTwitch.send(`PRIVMSG #${channelName} : ${magic8ball_arr[rnd]}`);
     }
   }
   // if (["specs", "pc", "rig", "pooter"].includes(bot_cmd)) {}
@@ -240,14 +286,11 @@ let msg_time = 0;
 // display chat message on stream
 function display_msg(name, outmsg, tags_obj, emote_list)
 {
-
-  // let msg_is_emote = false;
   let emote;
   let chatMSG = document.createElement("div");
 
   if (outmsg.startsWith('\x01ACTION')) {
     outmsg = outmsg.substring(7, outmsg.length - 1).trim();
-    // msg_is_emote = true;
 
     chatMSG.classList.add('msg_is_emote');
   }
@@ -263,8 +306,8 @@ function display_msg(name, outmsg, tags_obj, emote_list)
   auth.textContent = (tags_obj?.display_name || name) + ' ';
 
   if (tags_obj?.emotes) {
-      let parts = [];
-      let end_indx = outmsg.length;
+    let parts = [];
+    let end_indx = outmsg.length;
 
     for (let i = emote_list.length; --i >= 0; ) {
       emote = document.createElement("img");
@@ -335,6 +378,12 @@ function parse_tags(tags) {
       case 'display-name':
         parsed_tags.display_name = tag_val;
         break;
+      case 'subscriber':          //is user subscribed
+        parsed_tags.subscriber = tag_val == 1;
+        break;
+      case 'custom-reward-id':    //used for meme bans for now
+        parsed_tags.custom_reward_id  = tag_val;
+        break;
     }
   })
   // creates an empty list if returns null
@@ -384,27 +433,9 @@ function register_obs_handling()
     // console.log("Bot: scene name: ", event.detail.name);
     current_obs_scene = event.detail.name;
     update_chat_animaton();
-  })
+  });
 
   update_current_scene();
-
-  // window.obsstudio.getCurrentScene( scene => {
-  //   // display_msg("Bot: ", scene, '', '');
-  //   // console.log("Bot: scene name: ", scene.name);
-  //   if (scene.name === 'Cam Only') {
-  //     document.documentElement.classList.add('obs-scene-cam-only');
-  //   }
-  // })
-  // window.addEventListener('obsSceneChanged', event => {
-  //   if (event.detail.name === 'Cam Only') {
-  //     document.documentElement.classList.add('obs-scene-cam-only');
-  //   }
-  //   else {
-  //     document.documentElement.classList.remove('obs-scene-cam-only');
-  //   }
-  //   // console.log("Bot: scene name: ", event.detail.name);
-  //   // display_msg("Bot: ", event.detail.name, '', '');
-  // })
 }
 register_obs_handling();
 
@@ -414,7 +445,7 @@ function update_current_scene()
   window.obsstudio.getCurrentScene( scene => {
     // console.log("Bot: scene name: ", scene.name);
     current_obs_scene = scene.name;
-  })
+  });
 }
 
 //turn all chat message fadeout animation on/off
@@ -438,7 +469,6 @@ function animate_message(msg_box, is_new_msg=false)
   }
 
   let msg_txt = msg_box.querySelector('.Message');
-  // console.log("chat_message_div", msg_div);
 
   let fade_time = msg_txt.textContent.length/3;
 

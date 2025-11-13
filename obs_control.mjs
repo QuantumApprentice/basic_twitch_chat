@@ -1,5 +1,6 @@
 // play scene items from obs based on twich chat
 let clipSceneItemList = {};
+let banned_memes = null;
 
 export function OBS_connect() {
   const OBSWebSocketURL = 'ws://127.0.0.1:4455';
@@ -13,11 +14,11 @@ export function OBS_connect() {
     const obsMSG = JSON.parse(msg.data);
 
     if (obsMSG['op'] == 0) {
-      let wsVersion = obsMSG.d.obsWebSocketVersion;
+      // let wsVersion = obsMSG.d.obsWebSocketVersion;
       let wsRPCVersion = obsMSG.d.rpcVersion;
 
       if (wsRPCVersion != 1) {
-        console.error("OBS RPC version changed! Now I'm out of DATE!")
+        console.error("OBS RPC version changed! Now I'm out of DATE!");
       }
 
       const myIdentifyResponse = {
@@ -35,6 +36,7 @@ export function OBS_connect() {
     }
     else if (obsMSG['op'] == 7) {
       store_scene_items_list(obsMSG);
+      load_banned_items_list();
     }
     else {
       console.log("not 0 or 7: ", obsMSG);
@@ -90,6 +92,54 @@ function close_clip_items(wsOBS, obj) {
   }
 }
 
+function load_banned_items_list()
+{
+  banned_memes = JSON.parse(
+    localStorage.getItem("banned_memes") || '{}'
+  );
+
+  // console.log("banned memes list: ", banned_memes);
+  // console.log("localStorage ", localStorage);
+}
+
+//returns time until ban is lifted
+//or 0 if not banned
+export function meme_is_banned(meme)
+{
+  if (banned_memes) {
+    return (banned_memes[meme]);
+  } else {
+    return 0;
+  }
+}
+
+export function clear_banned_memes()
+{
+  localStorage.removeItem("banned_memes");
+  load_banned_items_list();
+}
+
+export function ban_meme_item(msg)
+{
+  console.log("working on banning memes");
+
+  const day = 24*60*60*1000; //86400000; //ms per 24 hours
+  let banTime = 0;
+  if (meme_is_banned(msg)) {
+    banTime = Number(banned_memes[msg]) + day;
+  } else {
+    banTime = Date.now() + day;
+  }
+
+  if (banned_memes == null) {
+    banned_memes = {};
+  }
+  banned_memes[msg] = banTime;
+
+  localStorage.setItem("banned_memes", JSON.stringify(banned_memes));
+  // console.log("localStorage after setItem() ", localStorage);
+}
+
 
 //TODO: add a queue for the clips to play
 //    one at a time
@@ -104,6 +154,13 @@ export function play_clip_items(wsOBS, clipname) {
     play_clip(wsOBS, "sch-lungs");
     play_clip(wsOBS, "sch-body");
     play_clip(wsOBS, "sch-groin");
+  } else if (clipname == "slaprandom") {
+    if (Math.random() > .5) {
+      play_clip(wsOBS, "slap");
+    } else {
+      play_clip(wsOBS, "shutup2");
+    }
+
   } else {
     return false;
   }
