@@ -1,6 +1,6 @@
 // @ts-nocheck
 let magic8ball, play_memes;
-let OBS_connect, play_clip_items, ban_meme_item, meme_is_banned, clear_banned_memes;
+let OBS_connect, play_clip_items, ban_meme_item, meme_is_banned, clear_banned_memes, unban_meme_item;
 let wsOBS;
 async function load_modules()
 {
@@ -14,6 +14,7 @@ async function load_modules()
     ({OBS_connect,
       play_clip_items,
       ban_meme_item,
+      unban_meme_item,
       clear_banned_memes,
       meme_is_banned } = await import("./obs_control.mjs"));
   } catch (error) {
@@ -78,6 +79,7 @@ wsTwitch.onopen = ()=>{
     wsTwitch.send(`CAP REQ :twitch.tv/commands twitch.tv/tags`);
     wsTwitch.send(`NICK justinfan6969`);
     wsTwitch.send(`JOIN #${channelName}`);
+    load_optout_list();
     // console.log('WebSocket connection opened');    //debug
 }
 
@@ -140,6 +142,8 @@ wsTwitch.onmessage = (fullmsg) => {
       let spc_indx = outmsg.indexOf(' ');
       if (spc_indx > 0) {
         bot_cmd = outmsg.substring(1,spc_indx);
+        //TODO: need to add something that parses
+        //      stuff after the space ' '
       }
       else {
         bot_cmd = outmsg.substring(1);
@@ -183,9 +187,6 @@ wsTwitch.onmessage = (fullmsg) => {
 // hours minutes seconds (hms)
 function convert_to_hms(time)
 {
-  const current_time = Date.now();
-  const diff = time - current_time;
-
   const seconds = Math.floor(diff/1000);  //ms per s
   const minutes = Math.floor(seconds/60); //s per min
   const hours   = Math.floor(minutes/60); //min per h
@@ -194,23 +195,43 @@ function convert_to_hms(time)
   return time_left;
 }
 
+//TODO: move these two to obs_control.mjs?
 function handle_obs_control(bot_cmd, name)
 {
   let outmsg, played;
-  if (meme_is_banned(bot_cmd)) {
-    let ban_time = convert_to_hms(meme_is_banned(bot_cmd));
-    outmsg = `!${bot_cmd} This meme is banned for ${ban_time}`;
+  let ban_time = meme_is_banned(bot_cmd);
+  // console.log(`${bot_cmd} ban time`,ban_time);
+  if (ban_time) {
+    const diff = Date.now() - ban_time;
+    if (diff < 0) {
+      unban_meme_item(bot_cmd);
+      played = play_clip_items(wsOBS, bot_cmd);
+    } else {
+      outmsg = `!${bot_cmd} This meme is banned for ${convert_to_hms(diff)}`;
+      played = true;
+    }
   } else {
     played = play_clip_items(wsOBS, bot_cmd);
 
-    //TODO: why do I have this here?
+    //TODO: this was for playing memes directly in the browser window
+    //      probably should move this and memes_overlay.js/html to a different folder
     // played = play_memes(bot_cmd);
   }
-  if (bot_cmd == "clearmemebans") {
+
+  if (bot_cmd == "unbanmeme" || bot_cmd == "clearmemebans") {
     if (name == channelName) {
-      clear_banned_memes();
+      if (bot_cmd == "clearmemebans") {
+        clear_banned_memes();
+      }
+      if (bot_cmd == "unbanmeme"){
+        console.log("unbanmeme only unbans 'khan' for now", bot_cmd);
+        unban_meme_item("khan");
+      }
+    } else {
+      outmsg += `Haha ${name}, you can't clear bans.`;
     }
   }
+
   return {played, outmsg};
 }
 
@@ -219,10 +240,23 @@ function handle_custom_reward(tags_obj, outmsg)
   const id = tags_obj.custom_reward_id;
   // this custom reward id is for banning memes temporarily
   if (id === "495a4bcf-5033-42c0-b9bb-93aca4bcf7ae") {
-    if (ban_meme_item) {
+    if (ban_meme_item) {    // this is from obs_control.mjs - need to re-organize this somehow
+      //TODO: need to display this on screen or respond to user directly
+      console.log("banning meme", outmsg);
       ban_meme_item(outmsg);
     }
   }
+}
+
+function load_optout_list()
+{
+  optout_list = JSON.parse(
+    localStorage.getItem("optout_list") || '[]'
+  );
+}
+function save_optout_list()
+{
+  localStorage.setItem("optout_list", JSON.stringify(optout_list));
 }
 
 let timer_running = false;
@@ -240,11 +274,13 @@ function other_bot_commands(bot_cmd, name)
   }
   if (bot_cmd == "optout") {
     optout_list.push(name);
+    save_optout_list();
   }
   if (bot_cmd == "optin") {
     let idx = optout_list.indexOf(name);
     if (idx >= 0) {
       optout_list.splice(idx, 1);
+      save_optout_list();
     }
   }
   if (bot_cmd == "magic8ball") {
@@ -379,10 +415,10 @@ function parse_tags(tags) {
         parsed_tags.display_name = tag_val;
         break;
       case 'subscriber':          //is user subscribed
-        parsed_tags.subscriber = tag_val == 1;
+        parsed_tags.subscriber = (tag_val == 1);
         break;
       case 'custom-reward-id':    //used for meme bans for now
-        parsed_tags.custom_reward_id  = tag_val;
+        parsed_tags.custom_reward_id = tag_val;
         break;
     }
   })

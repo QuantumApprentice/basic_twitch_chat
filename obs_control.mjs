@@ -3,7 +3,9 @@ let clipSceneItemList = {};
 let banned_memes = null;
 
 export function OBS_connect() {
+  //TODO: comment this back in to reset back to vanilla obs
   const OBSWebSocketURL = 'ws://127.0.0.1:4455';
+  // const OBSWebSocketURL = 'ws://127.0.0.1:4456';
   const wsOBS = new WebSocket(OBSWebSocketURL, 'obswebsocket.json');
 
   wsOBS.onopen  = console.log;
@@ -32,11 +34,27 @@ export function OBS_connect() {
       parse_clip_items(wsOBS);
     }
     else if (obsMSG['op'] == 5) {
-      close_clip_items(wsOBS, obsMSG);
+      // console.log("op 5", obsMSG);
+      // set this timeout randomly while running from outside obs
+      //  because when obs gets two (possibly conflicting) modify
+      //  requests from different websockets at the same time it
+      //  crashes without any warning and no errors in logs
+      // last tested on OBS v32.0.2
+      //TODO: update obs and check if the
+      //      multiple websocket on close
+      //      issue is still causing crashes
+      setTimeout(()=>{
+        close_clip_items(wsOBS, obsMSG);
+      },Math.random()*5000);
     }
     else if (obsMSG['op'] == 7) {
-      store_scene_items_list(obsMSG);
+      load_scene_items_list(obsMSG);
       load_banned_items_list();
+    }
+    else if (obsMSG['op'] == 9) {
+      if (!obsMSG['d'].results[0].requestStatus['code'] == 100) {  // 100 == success
+        console.log("request failed:", obsMSG);
+      }
     }
     else {
       console.log("not 0 or 7: ", obsMSG);
@@ -48,6 +66,7 @@ export function OBS_connect() {
 
 function close_clip_items(wsOBS, obj) {
   if (obj.d.eventType == "MediaInputPlaybackEnded") {
+    // console.log("closing clip");
     let request = {
       "op" : 8,
       "d"  : {
@@ -106,6 +125,7 @@ function load_banned_items_list()
 //or 0 if not banned
 export function meme_is_banned(meme)
 {
+  console.log(`${meme} banned_memes`, banned_memes);
   if (banned_memes) {
     return (banned_memes[meme]);
   } else {
@@ -119,30 +139,41 @@ export function clear_banned_memes()
   load_banned_items_list();
 }
 
+export function unban_meme_item(meme)
+{
+  delete banned_memes[meme];
+  save_banned_memes();
+}
+
+function save_banned_memes()
+{
+  localStorage.setItem("banned_memes", JSON.stringify(banned_memes));
+  console.log("localStorage after setItem() ", localStorage);
+}
+
 export function ban_meme_item(msg)
 {
   console.log("working on banning memes");
 
   const day = 24*60*60*1000; //86400000; //ms per 24 hours
   let banTime = 0;
-  if (meme_is_banned(msg)) {
-    banTime = Number(banned_memes[msg]) + day;
+  if (banTime = meme_is_banned(msg)) {
+    banTime += day;
   } else {
     banTime = Date.now() + day;
+    // banTime = Date.now() + 10000;
   }
 
   if (banned_memes == null) {
     banned_memes = {};
   }
   banned_memes[msg] = banTime;
-
-  localStorage.setItem("banned_memes", JSON.stringify(banned_memes));
-  // console.log("localStorage after setItem() ", localStorage);
+  save_banned_memes();
 }
 
 
 //TODO: add a queue for the clips to play
-//    one at a time
+//    one at a time?
 export function play_clip_items(wsOBS, clipname) {
 
   if (clipSceneItemList[clipname]) {
@@ -210,7 +241,7 @@ function parse_clip_items(wsOBS) {
   wsOBS.send(JSON.stringify(item_list_req));
 }
 
-function store_scene_items_list(obsMSG)
+function load_scene_items_list(obsMSG)
 {
   // console.log("op 7: ", obsMSG);
   if (obsMSG.d.requestType == "GetSceneItemList") {
