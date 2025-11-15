@@ -148,27 +148,45 @@ export function unban_meme_item(meme)
 function save_banned_memes()
 {
   localStorage.setItem("banned_memes", JSON.stringify(banned_memes));
-  console.log("localStorage after setItem() ", localStorage);
+  // console.log("localStorage after setItem() ", localStorage);
 }
 
+// the intent is to ban until end of stream at a mininum
 export function ban_meme_item(msg)
 {
-  console.log("working on banning memes");
+  // console.log("working on banning memes");
 
-  const day = 24*60*60*1000; //86400000; //ms per 24 hours
-  let banTime = 0;
-  if (banTime = meme_is_banned(msg)) {
-    banTime += day;
+  let meme;
+  if (msg[0] == '!') {
+    meme = msg.slice(1);
   } else {
-    banTime = Date.now() + day;
-    // banTime = Date.now() + 10000;
+    meme = msg;
+  }
+
+  //TODO: have to handle refunding the points used
+  //      if the meme name doesn't exist
+  if (!clipSceneItemList[meme]) {
+    // console.log(`${meme} not on the list`);
+    // console.log("clipSceneItemList: ", clipSceneItemList[meme]);
+    return false;
+  }
+
+  const full_day = 24*60*60*1000; //86400000; //ms per 24 hours
+  const half_day = full_day / 2; //also known as divide by 2
+  let banTime = meme_is_banned(meme);
+  if (banTime) {
+    banTime += full_day;
+  } else {
+    banTime = Date.now() + half_day;
   }
 
   if (banned_memes == null) {
     banned_memes = {};
   }
-  banned_memes[msg] = banTime;
+  banned_memes[meme] = banTime;
   save_banned_memes();
+
+  return banTime;
 }
 
 

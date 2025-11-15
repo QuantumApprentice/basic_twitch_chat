@@ -58,7 +58,8 @@ if (OBS_connect) {
 //13) add !magic8ball back into chatbot (need bot account access)
 //14) long strings of letters with no break will not wrap
 //15) !tts add text to speech back in
-//16) obs crashes when memes are played while working on any part of the chat interface
+//16) *FIXED* (apparently this is a bug caused by sending 2 separate clip adjustments at the same time using the websocket interface) obs crashes when memes are played while working on any part of the chat interface
+//17) parse 2-part commands so fancier things can be done with main command
 
 //TODO: Try this stuff:
 //1)  *FIXED* Set OBS to turn the "Monitor" setting on clips on while playing, off otherwise
@@ -134,7 +135,7 @@ wsTwitch.onmessage = (fullmsg) => {
     outmsg = txt.substring(msg_idx).trim();
 
     // custom rewards have to have special parsing
-    handle_custom_reward(tags_obj, outmsg);
+    outmsg = handle_custom_reward(tags_obj, outmsg);
 
     // check if its a bot command and handle
     if (outmsg[0] == '!') {
@@ -156,8 +157,8 @@ wsTwitch.onmessage = (fullmsg) => {
         ({played, outmsg} = handle_obs_control(bot_cmd, name));
       }
 
+      //else play other commands
       if (!played) {
-        //else play other commands
         other_bot_commands(bot_cmd, name);
       }
 
@@ -187,7 +188,7 @@ wsTwitch.onmessage = (fullmsg) => {
 // hours minutes seconds (hms)
 function convert_to_hms(time)
 {
-  const seconds = Math.floor(diff/1000);  //ms per s
+  const seconds = Math.floor(time/1000);  //ms per s
   const minutes = Math.floor(seconds/60); //s per min
   const hours   = Math.floor(minutes/60); //min per h
 
@@ -195,14 +196,18 @@ function convert_to_hms(time)
   return time_left;
 }
 
-//TODO: move these two to obs_control.mjs?
+//TODO: keep track of how long it's been
+//      since I last streamed and add that
+//      amount of time to each ban if it's
+//      been more than 24 hours or something like that
+//TODO: move these two funcs to obs_control.mjs?
 function handle_obs_control(bot_cmd, name)
 {
   let outmsg, played;
   let ban_time = meme_is_banned(bot_cmd);
   // console.log(`${bot_cmd} ban time`,ban_time);
   if (ban_time) {
-    const diff = Date.now() - ban_time;
+    const diff = ban_time - Date.now();
     if (diff < 0) {
       unban_meme_item(bot_cmd);
       played = play_clip_items(wsOBS, bot_cmd);
@@ -212,16 +217,15 @@ function handle_obs_control(bot_cmd, name)
     }
   } else {
     played = play_clip_items(wsOBS, bot_cmd);
-
-    //TODO: this was for playing memes directly in the browser window
-    //      probably should move this and memes_overlay.js/html to a different folder
-    // played = play_memes(bot_cmd);
   }
 
+  //TODO: add ability to parse multiple commands from a single bot_cmd
   if (bot_cmd == "unbanmeme" || bot_cmd == "clearmemebans") {
     if (name == channelName) {
       if (bot_cmd == "clearmemebans") {
         clear_banned_memes();
+        outmsg = "Meme bans cleared.";
+        played = true;
       }
       if (bot_cmd == "unbanmeme"){
         console.log("unbanmeme only unbans 'khan' for now", bot_cmd);
@@ -237,15 +241,24 @@ function handle_obs_control(bot_cmd, name)
 
 function handle_custom_reward(tags_obj, outmsg)
 {
+  let display_msg;
+  let banTime = 0;
   const id = tags_obj.custom_reward_id;
   // this custom reward id is for banning memes temporarily
   if (id === "495a4bcf-5033-42c0-b9bb-93aca4bcf7ae") {
     if (ban_meme_item) {    // this is from obs_control.mjs - need to re-organize this somehow
-      //TODO: need to display this on screen or respond to user directly
-      console.log("banning meme", outmsg);
-      ban_meme_item(outmsg);
+      if (!(banTime = ban_meme_item(outmsg))) {
+        display_msg = `Unable to find ${outmsg} for banning.`;
+      } else {
+        // console.log("banning meme", outmsg);
+        display_msg = `${outmsg} has been banned for ${convert_to_hms(banTime - Date.now())}.`;
+      }
     }
+  } else {
+    display_msg = outmsg;
   }
+
+  return display_msg;
 }
 
 function load_optout_list()
@@ -256,7 +269,10 @@ function load_optout_list()
 }
 function save_optout_list()
 {
-  localStorage.setItem("optout_list", JSON.stringify(optout_list));
+  localStorage.setItem(
+    "optout_list",
+    JSON.stringify(optout_list)
+  );
 }
 
 let timer_running = false;
@@ -265,6 +281,7 @@ function other_bot_commands(bot_cmd, name)
 {
   // new timer countdown function
   // used to remind me I'm cooking stuff in the kitchen
+  //TODO: make this actually useful by parsing out the time from the message
   if (bot_cmd == "timer") {
     if (!timer_running) {
       timer_running = true;
