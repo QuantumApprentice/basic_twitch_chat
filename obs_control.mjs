@@ -125,7 +125,7 @@ function load_banned_items_list()
 //or 0 if not banned
 export function meme_is_banned(meme)
 {
-  console.log(`${meme} banned_memes`, banned_memes);
+  // console.log(`${meme} banned_memes`, banned_memes);
   if (banned_memes) {
     return (banned_memes[meme]);
   } else {

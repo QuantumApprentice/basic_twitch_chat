@@ -126,11 +126,15 @@ wsTwitch.onmessage = (fullmsg) => {
     // create name based on start/end positions
     name = txt.substring(name_strt, name_end).trim();
 
-    if ((name == ":tmi")
+    if ( (name == ":tmi")
       || (name == "justinfan6969")
       || (name.includes("@emote-only=0;"))
       || (name == ":justinfan6969"))
       { return; }
+
+    // if (name == "stepienz13posterunku") {
+    //   play_clip_items(wsOBS, "step")
+    // }
 
     outmsg = txt.substring(msg_idx).trim();
 
@@ -139,10 +143,19 @@ wsTwitch.onmessage = (fullmsg) => {
 
     // check if its a bot command and handle
     if (outmsg[0] == '!') {
-      let bot_cmd;
-      let spc_indx = outmsg.indexOf(' ');
-      if (spc_indx > 0) {
-        bot_cmd = outmsg.substring(1,spc_indx);
+      let bot_cmd, sub_cmd;
+      let spc_indx1 = outmsg.indexOf(' ');
+      if (spc_indx1 > 0) {
+        let spc_indx2 = outmsg.indexOf(' ', spc_indx1+1);
+        if (spc_indx2 > 0) {
+          //TODO: use this for a 3rd command maybe?
+          // sub_cmd = outmsg.substring(spc_indx1+1, spc_indx2);
+        }
+        bot_cmd = outmsg.substring(1, spc_indx1);
+        sub_cmd = outmsg.substring(spc_indx1 +1);
+        console.log("outmsg: ", outmsg);
+        console.log("bot_cmd: ", bot_cmd);
+        console.log("sub_cmd: ", sub_cmd);
         //TODO: need to add something that parses
         //      stuff after the space ' '
       }
@@ -154,7 +167,7 @@ wsTwitch.onmessage = (fullmsg) => {
       //play memes if its a meme
       let played = false;
       if (play_clip_items) {
-        ({played, outmsg} = handle_obs_control(bot_cmd, name));
+        ({played, outmsg} = handle_obs_control(name, bot_cmd, sub_cmd));
       }
 
       //else play other commands
@@ -201,7 +214,7 @@ function convert_to_hms(time)
 //      amount of time to each ban if it's
 //      been more than 24 hours or something like that
 //TODO: move these two funcs to obs_control.mjs?
-function handle_obs_control(bot_cmd, name)
+function handle_obs_control(name, bot_cmd, sub_cmd)
 {
   let outmsg, played;
   let ban_time = meme_is_banned(bot_cmd);
@@ -227,9 +240,8 @@ function handle_obs_control(bot_cmd, name)
         outmsg = "Meme bans cleared.";
         played = true;
       }
-      if (bot_cmd == "unbanmeme"){
-        console.log("unbanmeme only unbans 'khan' for now", bot_cmd);
-        unban_meme_item("khan");
+      if (bot_cmd == "unbanmeme") {
+        unban_meme_item(sub_cmd);
       }
     } else {
       outmsg += `Haha ${name}, you can't clear bans.`;
