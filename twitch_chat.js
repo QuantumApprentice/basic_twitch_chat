@@ -218,8 +218,11 @@ function handle_obs_control(name, bot_cmd, sub_cmd)
 {
   let outmsg, played;
   let ban_time = meme_is_banned(bot_cmd);
-  // console.log(`${bot_cmd} ban time`,ban_time);
-  if (ban_time) {
+
+  if ((ban_time) && (name == channelName) && (sub_cmd == 'force')) {
+    played = play_clip_items(wsOBS, bot_cmd);
+    outmsg = `!${bot_cmd} This meme is banned for ${convert_to_hms(diff)}`;
+  } else if (ban_time) {
     const diff = ban_time - Date.now();
     if (diff < 0) {
       unban_meme_item(bot_cmd);
@@ -262,8 +265,11 @@ function handle_custom_reward(tags_obj, outmsg)
       if (!(banTime = ban_meme_item(outmsg))) {
         display_msg = `Unable to find ${outmsg} for banning.`;
       } else {
-        // console.log("banning meme", outmsg);
-        display_msg = `${outmsg} has been banned for ${convert_to_hms(banTime - Date.now())}.`;
+        if (outmsg[0] == '!') {
+          display_msg = `${outmsg.slice(1)} has been banned for ${convert_to_hms(banTime - Date.now())}.`;
+        } else {
+          display_msg = `${outmsg} has been banned for ${convert_to_hms(banTime - Date.now())}.`;
+        }
       }
     }
   } else {
