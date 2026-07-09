@@ -48,7 +48,6 @@
       font-family: "Fira Code"; font-weight: 500;
       color: var(--name-color);
       font-size: 20px;
-      /* padding-left: 10px; */
     }
     .Message {
       font-family: "Fira Code"; font-weight: 500;
@@ -61,7 +60,7 @@
       background-color: rgba(0, 0, 0, .8);
       border-radius: 5px;
       padding: 0px 10px 10px 10px;
-    } 
+    }
     .msg_is_emote .Name, .msg_is_emote .Message {
       color: var(--name-color);
       font-size: 20px;
@@ -79,13 +78,3 @@
 
 </body>
 </html>
-
-
-
-<!-- 
-So in your #ChatMessages block, you could say 
---name-color: hotpink;
-Then your .Name could use color: var(--name-color)
-Then in the JS, when you create the message box,
- assign the property to that specific chat message,
- chat_msg.style.setProperty('--name-color', user_color) -->

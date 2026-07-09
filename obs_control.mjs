@@ -174,10 +174,13 @@ export function ban_meme_item(msg)
   const full_day = 24*60*60*1000; //86400000; //ms per 24 hours
   const half_day = full_day / 2; //also known as divide by 2
   let banTime = meme_is_banned(meme);
-  if (banTime) {
-    banTime += full_day;
-  } else {
+  if (banTime < Date.now()) {
+    banTime = 0;
+  }
+  if (banTime == 0) {
     banTime = Date.now() + half_day;
+  } else {
+    banTime += full_day;
   }
 
   if (banned_memes == null) {

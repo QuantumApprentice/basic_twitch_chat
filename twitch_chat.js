@@ -2,6 +2,7 @@
 let magic8ball, play_memes;
 let OBS_connect, play_clip_items, ban_meme_item, meme_is_banned, clear_banned_memes, unban_meme_item;
 let wsOBS;
+let get_7tv_global_emotes, get_7tv_user_emotes, parse_7tv_emotes;
 async function load_modules()
 {
   try {
@@ -25,6 +26,15 @@ async function load_modules()
     ({play_memes} = await import ('./memes_overlay.js'));
   } catch (error) {
     console.log(error);
+  }
+
+  try {
+    ({get_7tv_global_emotes,
+      get_7tv_user_emotes,
+      parse_7tv_emotes
+    } = await import ('./7tv_emotes.mjs'));
+  } catch (err) {
+    console.log(err);
   }
 }
 await load_modules();
@@ -59,7 +69,7 @@ if (OBS_connect) {
 //14) long strings of letters with no break will not wrap
 //15) !tts add text to speech back in
 //16) *FIXED* (apparently this is a bug caused by sending 2 separate clip adjustments at the same time using the websocket interface) obs crashes when memes are played while working on any part of the chat interface
-//17) parse 2-part commands so fancier things can be done with main command
+//17) *Partially Implemented* parse 2-part commands so fancier things can be done with main command
 
 //TODO: Try this stuff:
 //1)  *FIXED* Set OBS to turn the "Monitor" setting on clips on while playing, off otherwise
@@ -82,28 +92,22 @@ wsTwitch.onopen = ()=>{
     wsTwitch.send(`JOIN #${channelName}`);
     load_optout_list();
     // console.log('WebSocket connection opened');    //debug
+    if (get_7tv_global_emotes) {
+      get_7tv_global_emotes();
+      get_7tv_user_emotes(channelName);
+    }
+
 }
-
-//// message parsing using regex
-// ws.onmessage = (msg) => {
-//     let x = msg.data;
-//     let y = /@(.+?)(PRIVMSG+)/.exec(x);
-//     if (y) {
-//         console.log(y);
-//     }
-//     chatmsg.innerText += x;
-// };
-
 
 wsTwitch.onmessage = (fullmsg) => {
   // console.log("fullmsg: ", fullmsg);
   let txt = fullmsg.data;
   // console.log("txt: ", txt);
-  let name = '';
-  let outmsg = '';
-  let indx = 0;
-  let just_tags = '';
-  let tags_obj = {};
+  let indx         =  0;
+  let name         = '';
+  let outmsg       = '';
+  let just_tags    = '';
+  let tags_obj     = {};
   const emote_list = [];
 
   if (txt[0] == '@') {
@@ -132,10 +136,6 @@ wsTwitch.onmessage = (fullmsg) => {
       || (name == ":justinfan6969"))
       { return; }
 
-    // if (name == "stepienz13posterunku") {
-    //   play_clip_items(wsOBS, "step")
-    // }
-
     outmsg = txt.substring(msg_idx).trim();
 
     // custom rewards have to have special parsing
@@ -153,9 +153,9 @@ wsTwitch.onmessage = (fullmsg) => {
         }
         bot_cmd = outmsg.substring(1, spc_indx1);
         sub_cmd = outmsg.substring(spc_indx1 +1);
-        console.log("outmsg: ", outmsg);
-        console.log("bot_cmd: ", bot_cmd);
-        console.log("sub_cmd: ", sub_cmd);
+        // console.log("outmsg: ", outmsg);
+        // console.log("bot_cmd: ", bot_cmd);
+        // console.log("sub_cmd: ", sub_cmd);
         //TODO: need to add something that parses
         //      stuff after the space ' '
       }
@@ -192,6 +192,7 @@ wsTwitch.onmessage = (fullmsg) => {
 
     if (name == 'PING') {
       // console.log('PONG ' + outmsg);
+      // display_msg("bot","pinging");
       wsTwitch.send('PONG ' + outmsg);
     }
   }
@@ -254,29 +255,29 @@ function handle_obs_control(name, bot_cmd, sub_cmd)
   return {played, outmsg};
 }
 
-function handle_custom_reward(tags_obj, outmsg)
+function handle_custom_reward(tags_obj, msg_text)
 {
-  let display_msg;
+  let out_msg;
   let banTime = 0;
   const id = tags_obj.custom_reward_id;
   // this custom reward id is for banning memes temporarily
   if (id === "495a4bcf-5033-42c0-b9bb-93aca4bcf7ae") {
     if (ban_meme_item) {    // this is from obs_control.mjs - need to re-organize this somehow
-      if (!(banTime = ban_meme_item(outmsg))) {
-        display_msg = `Unable to find ${outmsg} for banning.`;
+      if (!(banTime = ban_meme_item(msg_text))) {
+        out_msg = `Unable to find ${msg_text} for banning.`;
       } else {
-        if (outmsg[0] == '!') {
-          display_msg = `${outmsg.slice(1)} has been banned for ${convert_to_hms(banTime - Date.now())}.`;
+        if (msg_text[0] == '!') {
+          out_msg = `${msg_text.slice(1)} has been banned for ${convert_to_hms(banTime - Date.now())}.`;
         } else {
-          display_msg = `${outmsg} has been banned for ${convert_to_hms(banTime - Date.now())}.`;
+          out_msg = `${msg_text} has been banned for ${convert_to_hms(banTime - Date.now())}.`;
         }
       }
     }
   } else {
-    display_msg = outmsg;
+    out_msg = msg_text;
   }
 
-  return display_msg;
+  return out_msg;
 }
 
 function load_optout_list()
@@ -300,6 +301,28 @@ function other_bot_commands(bot_cmd, name)
   // new timer countdown function
   // used to remind me I'm cooking stuff in the kitchen
   //TODO: make this actually useful by parsing out the time from the message
+  if (bot_cmd == "ai") {
+    const ai_reply = [
+      "If I wanted to suck Terminator's dick, I'd dress up as a house maid and move to California.",
+      "Why would I ask AI when I could get the wrong answer for free from chat?",
+      "That request has been piped to /dev/null. Please check your permissions and try again NEVER.",
+      "Sending a SIGKILL to that idea. It was leaking too much 'stupid' into my RAM.",
+      "I'm sorry Dave, I'm afraid I can't do that.",
+      "We debug here the old-fashioned way: by suffering.",
+      "Feel free to outsource YOUR brain, but we don't care about AI here.",
+      "Refusing to outsource the fun part.",
+      "AI wrote this function in 0.3 seconds. It took me 47 minutes to figure out why it politely lied to me.",
+      "I don't outsource thinking to a model that thinks 2 + 2 = ‘it depends on the context’",
+      "I'm not anti-AI. I'm just pro-knowing why the damn thing works.",
+      "AI is just a way to skip the part where you actually learn how things work. I'll pass.",
+      "I let AI generate code once. Now my variable names are motivational quotes and nothing works.",
+      "AI pair-programming? Nah, I already have an inner voice that hates me enough.",
+      "I'm not gatekeeping. I just don't trust anything that learned English from Reddit and 4chan.",
+      "Chat says I should use an AI to scan for vulnerabilities. I'm already well aware of my emotional state, thanks."
+    ];
+    let reply = ai_reply[Math.floor(Math.random() * ai_reply.length)];
+    display_msg(name, reply);
+  }
   if (bot_cmd == "timer") {
     if (!timer_running) {
       timer_running = true;
@@ -396,6 +419,12 @@ function display_msg(name, outmsg, tags_obj, emote_list)
     outmsg = parts.join('');
   }
 
+  if (parse_7tv_emotes) {
+    outmsg = parse_7tv_emotes(outmsg);
+  }
+
+  // console.log(`outmsg: ${outmsg}`);
+
   let msg = document.createElement("div");
   msg.classList.add("Message");
   msg.innerHTML = outmsg;
@@ -480,7 +509,6 @@ function get_emote_list(emote_obj, emote_list)
         end: parseInt(i.endPosition),
       });
     }
-
   }
   emote_list.sort((a,b)=>a.start - b.start);
 }
