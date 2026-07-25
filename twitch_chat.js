@@ -1,5 +1,5 @@
 // @ts-nocheck
-let magic8ball, play_memes;
+let magic8ball;
 let OBS_connect, play_clip_items, ban_meme_item, meme_is_banned, clear_banned_memes, unban_meme_item;
 let wsOBS;
 let get_7tv_global_emotes, get_7tv_user_emotes, parse_7tv_emotes;
@@ -18,12 +18,6 @@ async function load_modules()
       unban_meme_item,
       clear_banned_memes,
       meme_is_banned } = await import("./obs_control.mjs"));
-  } catch (error) {
-    console.log(error);
-  }
-
-  try {
-    ({play_memes} = await import ('./memes_overlay.js'));
   } catch (error) {
     console.log(error);
   }
@@ -224,6 +218,7 @@ function handle_obs_control(name, bot_cmd, sub_cmd)
     played = play_clip_items(wsOBS, bot_cmd);
     outmsg = `!${bot_cmd} This meme is banned for ${convert_to_hms(diff)}`;
   } else if (ban_time) {
+    // console.log(`meme banned: ${bot_cmd} banned for ${ban_time}`);
     const diff = ban_time - Date.now();
     if (diff < 0) {
       unban_meme_item(bot_cmd);
@@ -260,6 +255,7 @@ function handle_custom_reward(tags_obj, msg_text)
   let out_msg;
   let banTime = 0;
   const id = tags_obj.custom_reward_id;
+
   // this custom reward id is for banning memes temporarily
   if (id === "495a4bcf-5033-42c0-b9bb-93aca4bcf7ae") {
     if (ban_meme_item) {    // this is from obs_control.mjs - need to re-organize this somehow
