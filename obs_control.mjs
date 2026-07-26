@@ -2,6 +2,28 @@
 let clipSceneItemList = {};
 let banned_memes = null;
 
+// Message Types (OpCodes)
+//     Hello (OpCode 0)
+//     Identify (OpCode 1)
+//     Identified (OpCode 2)
+//     Reidentify (OpCode 3)
+//     Event (OpCode 5)
+//     Request (OpCode 6)
+//     RequestResponse (OpCode 7)
+//     RequestBatch (OpCode 8)
+//     RequestBatchResponse (OpCode 9)
+const op = {
+  "Hello"                     : 0,
+  "Identify"                  : 1,
+  "Identified"                : 2,
+  "Reidentify"                : 3,
+  "Event"                     : 5,
+  "Request"                   : 6,
+  "RequestResponse"           : 7,
+  "RequestBatch"              : 8,
+  "RequestBatchResponse"      : 9,
+}
+
 export function OBS_connect() {
   //TODO: comment this back in to reset back to vanilla obs
   const OBSWebSocketURL = 'ws://127.0.0.1:4455';
@@ -15,7 +37,7 @@ export function OBS_connect() {
   wsOBS.onmessage = (msg)=> {
     const obsMSG = JSON.parse(msg.data);
 
-    if (obsMSG['op'] == 0) {
+    if (obsMSG['op'] == op.Hello) {
       // let wsVersion = obsMSG.d.obsWebSocketVersion;
       let wsRPCVersion = obsMSG.d.rpcVersion;
 
@@ -30,11 +52,11 @@ export function OBS_connect() {
       const out = JSON.stringify(myIdentifyResponse);
       wsOBS.send(out);
     }
-    else if (obsMSG['op'] == 2) {
+    else if (obsMSG['op'] == op.Identified) {
       parse_clip_items(wsOBS);
     }
-    else if (obsMSG['op'] == 5) {
-      // console.log("op 5", obsMSG);
+    else if (obsMSG['op'] == op.Event) {
+      // console.log("op 5: Event", obsMSG);
       // set this timeout randomly while running from outside obs
       //  because when obs gets two (possibly conflicting) modify
       //  requests from different websockets at the same time it
@@ -47,17 +69,17 @@ export function OBS_connect() {
         close_clip_items(wsOBS, obsMSG);
       },Math.random()*5000);
     }
-    else if (obsMSG['op'] == 7) {
+    else if (obsMSG['op'] == op.RequestResponse) {
       load_scene_items_list(obsMSG);
       load_banned_items_list();
     }
-    else if (obsMSG['op'] == 9) {
+    else if (obsMSG['op'] == op.RequestBatchResponse) {
       if (!obsMSG['d'].results[0].requestStatus['code'] == 100) {  // 100 == success
         console.log("request failed:", obsMSG);
       }
     }
     else {
-      console.log("not 0 or 7: ", obsMSG);
+      console.log("not 0 (Hello) or 7 (RequestResponse): ", obsMSG);
     }
   }
 
@@ -171,12 +193,14 @@ export function ban_meme_item(msg)
     return false;
   }
 
-  const full_day = 24*60*60*1000; //86400000; //ms per 24 hours
-  const half_day = full_day / 2; //also known as divide by 2
-  let banTime = meme_is_banned(meme);
+  const full_day = 24*60*60*1000;           // 86400000; //ms per 24 hours
+  const half_day = full_day / 2;            // also known as divide by 2
+  let banTime = meme_is_banned(meme) || 0;  // || 0 ==> handles the case where NaN or undefined are returned
   if (banTime < Date.now()) {
+    // console.log("ban time < Date.now: ", banTime);
     banTime = 0;
   }
+  // console.log("banTime after check: ", banTime);
   if (banTime == 0) {
     banTime = Date.now() + half_day;
   } else {
